@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>Dynamics Run</title>
+<style>
+  :root { --bg:#0b0f14; --fg:#e6eef7; --accent:#4cc2ff; --warn:#ffb347; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui, sans-serif; display:flex; flex-direction:column; align-items:center; }
+  h1 { font-size:20px; margin:12px 0 4px; }
+  #info { font-size:13px; opacity:.8; margin-bottom:8px; text-align:center; }
+  canvas { background:#0b1118; border:2px solid #1c2a3a; border-radius:10px; touch-action:none; box-shadow:0 0 0 2px #0f172a inset; background-image: linear-gradient(0deg, rgba(76,194,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(76,194,255,0.08) 1px, transparent 1px); background-size: 20px 20px; }
+  #hud { margin:8px 0; font-size:14px; }
+  .lr { display:flex; gap:10px; margin:6px 0 14px; }
+  .btn { background:#1f2937; color:#e5e7eb; border:1px solid #374151; border-radius:12px; font-size:80px; padding:40px 64px; }
+  .btn:active { transform:scale(0.98); background:#111827; }
+</style>
+</head>
+<body>
+  <h1>🛰️ Dynamics Run</h1>
+  <div id="version" style="font-size:12px;opacity:.7;margin-bottom:4px;">Version: mockup v2d (explosion fx)</div>
+  <div id="info">Styr vänster/höger. Samla “bomber” (de exploderar) och undvik kollision. 💥</div>
+  <canvas id="c" width="320" height="320"></canvas>
+  <div id="hud">Poäng: <span id="score">0</span></div>
+
+  <div class="lr" aria-label="Vänster/höger">
+    <button class="btn" data-turn="left">⬅️</button>
+    <button class="btn" data-turn="right">➡️</button>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const lr = document.querySelector('.lr');
+  const grid = 16;
+  const size = canvas.width / grid;
+  let dir = {x:1, y:0};
+  let nextDir = {x:1, y:0};
+  let snake = [{x:8, y:8}];
+  let food = {x:4, y:4};
+  let score = 0;
+  let speed = 120; // ms
+  let last = 0;
+  let dead = false;
+  let explosions = [];
+
+  function randFood() {
+    let ok = false;
+    while(!ok) {
+      food.x = Math.floor(Math.random()*grid);
+      food.y = Math.floor(Math.random()*grid);
+      ok = !snake.some(s => s.x===food.x && s.y===food.y);
+    }
+  }
+
+  function swapButtons(){
+    if (!lr) return;
+    const left = lr.querySelector('[data-turn="left"]');
+    const right = lr.querySelector('[data-turn="right"]');
+    if (left && right) { lr.insertBefore(right, left); }
+  }
+
+  function reset() {
+    snake = [{x:8,y:8}];
+    dir = {x:1,y:0};
+    nextDir = {x:1,y:0};
+    score = 0; scoreEl.textContent = score;
+    randFood();
+    dead = false;
+  }
+
+  function tick(t) {
+    if (t - last > speed && !dead) {
+      last = t;
+      dir = nextDir;
+      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+      if (head.x<0||head.y<0||head.x>=grid||head.y>=grid || snake.some(s=>s.x===head.x&&s.y===head.y)) {
+        dead = true;
+      } else {
+        snake.unshift(head);
+        if (head.x===food.x && head.y===food.y) {
+          score++; scoreEl.textContent = score;
+          if (score % 5 === 0) swapButtons();
+          explosions.push({x: head.x, y: head.y, t: 0});
+          randFood();
+        } else {
+          snake.pop();
+        }
+      }
+    }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // bomb
+    ctx.fillStyle = "#f59e0b";
+    ctx.beginPath();
+    const bx = food.x*size + size/2, by = food.y*size + size/2;
+    ctx.arc(bx, by, size*0.35, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "#ffcc80";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx+size*0.15, by-size*0.35);
+    ctx.lineTo(bx+size*0.32, by-size*0.55);
+    ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(e.x*size+size/2, e.y*size+size/2, r*0.6, 0, Math.PI*2);
+      ctx.fill();
+
+    // explosions
+    explosions = explosions.filter(e=>e.t<20);
+    explosions.forEach(e=>{
+      const t = e.t++;
+      const r = (t/20) * size*1.4;
+      ctx.strokeStyle = `rgba(255,179,71,${1 - t/20})`;
+      ctx.fillStyle = `rgba(255,120,50,${0.25 - t/200})`;
+      ctx.fillStyle = `rgba(255,120,50,${0.25 - t/400})`;
+      ctx.fillStyle = `rgba(255,120,50,${0.25 - t/200})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(e.x*size+size/2, e.y*size+size/2, r, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(e.x*size+size/2, e.y*size+size/2, r*0.6, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // snake
+    ctx.fillStyle = "#4ade80";
+    snake.forEach((s)=> {
+      ctx.fillRect(s.x*size+1, s.y*size+1, size-2, size-2);
+    });
+
+    if (dead) {
+      ctx.fillStyle = "rgba(0,0,0,.6)";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.font = "20px system-ui";
+      ctx.fillText("Game Over – tryck för att starta", canvas.width/2, canvas.height/2);
+    }
+  }
+
+  function turnLeft(){ nextDir = {x: dir.y, y: -dir.x}; }
+  function turnRight(){ nextDir = {x: -dir.y, y: dir.x}; }
+
+  // buttons (left/right only)
+  document.querySelectorAll('[data-turn]').forEach(b=>{
+    b.addEventListener('pointerdown', e=>{ e.preventDefault(); if (b.dataset.turn==="left") turnLeft(); else turnRight(); }, {passive:false});
+      });
+
+
+  reset();
+  requestAnimationFrame(tick);
+  canvas.addEventListener('pointerdown', ()=>{ if (dead) reset(); });
+  document.body.addEventListener('pointerdown', ()=>{ if (dead) reset(); });
+})();
+</script>
+</body>
+</html>
